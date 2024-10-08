@@ -17,6 +17,7 @@
   "homepage": "https://github.com/Ruxton07/2DFluidSimulation#readme",
   "description": "",
   "dependencies": {
+    "@google/clasp": "^2.4.2",
     "@types/google-apps-script": "^1.0.83"
   }
 }
