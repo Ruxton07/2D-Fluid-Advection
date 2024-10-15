@@ -1,4 +1,8 @@
-const X_GRID_SIZE = 40;
+//This is a deprecated file. When I first implemented this project (and made this extremely low quality code),
+//I was using JavaScript integrated with Google Apps Script. I have since used python for my algorithm this code is
+//no longer used, deprecated, and very bad at simulating anyways. I am keeping it here for reference.
+
+/*const X_GRID_SIZE = 40;
 const Y_GRID_SIZE = 40;
 
 function main() {
@@ -91,4 +95,4 @@ function addToSideBar() {
     const html = htmlServ.evaluate();
     const ui = SpreadsheetApp.getUi();
     ui.showSidebar(html);
-}
+}*/
