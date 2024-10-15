@@ -1,2 +1,8 @@
 .venv
+.vscode
+
 node_modules/*
+__pycache__/*
+
+token.json
+credentials.json
