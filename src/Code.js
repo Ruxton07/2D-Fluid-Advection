@@ -96,3 +96,68 @@ function addToSideBar() {
     const ui = SpreadsheetApp.getUi();
     ui.showSidebar(html);
 }*/
+
+/*Similar Luau Implementation
+local HadDensity = math.max(0, Density - 2) * 0.75
+                
+                if HadDensity > 0 then
+                    local Total = 0
+                    
+                    local GridLeft = Grid[x - 1]
+                    local GridRight = Grid[x + 1]
+                    local GridDown = Grid[x][y - 1]
+                    local GridUp = Grid[x][y + 1]
+                    
+                    if GridLeft and GridLeft[y] and (Density + HadDensity / 4) > GridLeft[y][1] then
+                        local Land = LandGrid[x - 1] and LandGrid[x - 1][y]
+                        
+                        if (not Land) or IsLand or (Density + HadDensity / 4) > ((LandGrid[x - 1][y] + 1) * 2) then
+                            Grid[x - 1][y][1] = GridLeft[y][1] + HadDensity / 4
+                            Grid[x - 1][y][3] = true
+                            
+                            Total = Total + 0.25
+                        end
+                    end
+                    
+                    if GridRight and GridRight[y] and (Density + HadDensity / 4) > GridRight[y][1] then
+                        local Land = LandGrid[x + 1] and LandGrid[x + 1][y]
+                        
+                        if (not Land) or IsLand or (Density + HadDensity / 4) > ((LandGrid[x + 1][y] + 1) * 2) then
+                            Grid[x + 1][y][1] = GridRight[y][1] + HadDensity / 4
+                            Grid[x + 1][y][3] = true
+                            
+                            Total = Total + 0.25
+                        end
+                    end
+                    
+                    if GridDown and (Density + HadDensity / 4) > GridDown[1] then
+                        local Land = LandGrid[x] and LandGrid[x][y - 1]
+                        
+                        if (not Land) or IsLand or (Density + HadDensity / 4) > ((LandGrid[x][y - 1] + 1) * 2) then
+                            Grid[x][y - 1][1] = GridDown[1] + HadDensity / 4
+                            Grid[x][y - 1][3] = true
+                            
+                            Total = Total + 0.25
+                        end
+                    end
+                    
+                    if GridUp and (Density + HadDensity / 4) > GridUp[1] then
+                        local Land = LandGrid[x] and LandGrid[x][y + 1]
+                        
+                        if (not Land) or IsLand or (Density + HadDensity / 4) > ((LandGrid[x][y + 1] + 1) * 2) then
+                            Grid[x][y + 1][1] = GridUp[1] + HadDensity / 4
+                            Grid[x][y + 1][3] = true
+                            
+                            Total = Total + 0.25
+                        end
+                    end
+                    
+                    Density = Density - HadDensity * Total
+                    
+                    if Density <= 0 then
+                        Grid[x][y] = { 0, Current[2], HadDensity > 0 or Current[3] }
+                    else
+                        Grid[x][y] = { Density, Current[2], Current[3] }
+                    end
+                end
+*/
