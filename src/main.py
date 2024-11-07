@@ -16,6 +16,7 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import src.simulation as sim
+import src.Prototype2 as p2
 
 
 # If modifying these scopes, delete the file token.json.
