@@ -79,4 +79,4 @@ Contributions are welcome! Please open an issue or submit a pull request on GitH
 
 ## Contact
 
-For any questions or inquiries, please contact me at [rt.kellar@gmail.com] or direct message me through my discord, ruxton07.
+For any questions or inquiries, please contact me at [rt.kellar@gmail.com] or direct message me through my Discord, ruxton07.
