@@ -16,9 +16,14 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import src.simulation as sim
-import src.Prototype2 as p2
-import src.Prototype3 as p3
-import src.Prototype4 as p4
+prototypes = {
+    "p2": "src.Prototypes.Prototype2",
+    "p3": "src.Prototypes.Prototype3",
+    "p4": "src.Prototypes.Prototype4"
+}
+
+for key, module in prototypes.items():
+    globals()[key] = __import__(module, fromlist=['main'])
 
 
 # If modifying these scopes, delete the file token.json.

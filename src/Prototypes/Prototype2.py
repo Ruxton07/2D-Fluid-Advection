@@ -10,8 +10,8 @@ from time import sleep
 
 import sys
 import math
-import GridObject
-import SimArray
+import utilityclasses.GridObject as GridObject
+import utilityclasses.SimArray as SimArray
 
 
 CLIENT_SECRET_FILE = "credentials.json"

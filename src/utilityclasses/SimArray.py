@@ -1,4 +1,4 @@
-import GridObject
+import utilityclasses.GridObject as GridObject
 
 class SimArray:
     # default value is 40x40 array of 0s
