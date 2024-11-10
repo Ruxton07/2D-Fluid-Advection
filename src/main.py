@@ -17,6 +17,8 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import src.simulation as sim
 import src.Prototype2 as p2
+import src.Prototype3 as p3
+import src.Prototype4 as p4
 
 
 # If modifying these scopes, delete the file token.json.
@@ -27,6 +29,7 @@ SCOPES = [
 # The ID and range of a sample spreadsheet.
 SPREADSHEET_ID = "1NapEbwM5uHI1JoR1sZo8Qzd5WGt84tHy3jl_P5IljRM"
 GRID_RANGE = "Grid!A1:AN40"
+SIMULATION_CHOICE = "c"
 print(f"Using range: {GRID_RANGE}")
 
 def main():
@@ -48,7 +51,17 @@ def main():
             token.write(creds.to_json())
 
     try:
-        sim.main(creds, SPREADSHEET_ID, GRID_RANGE)
+        match SIMULATION_CHOICE:
+            case "c":
+                sim.main(creds, SPREADSHEET_ID, GRID_RANGE)
+            case "p2":
+                p2.main(creds, SPREADSHEET_ID, GRID_RANGE)
+            case "p3":
+                p3.main(creds, SPREADSHEET_ID, GRID_RANGE)
+            case "p4":
+                p4.main(creds, SPREADSHEET_ID, GRID_RANGE)
+            case _:
+                sim.main(creds, SPREADSHEET_ID, GRID_RANGE)
     except HttpError as err:
         print(err)
 

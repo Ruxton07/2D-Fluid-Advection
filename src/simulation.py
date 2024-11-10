@@ -1,150 +1,172 @@
 import os.path
-
+import sys
+import math
+import GridObject
+import SimArray
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.oauth2 import service_account
-from time import sleep
-
-import sys
-import math
-import GridObject
-import SimArray
+import numpy as np
+import time
 
 
 CLIENT_SECRET_FILE = "credentials.json"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
-EPOCH_STEPS = 10
+
+# LBM parameters
+tau = 0.6  # Relaxation time
+c_sqr = 1 / 3  # Speed of sound squared
+weights = [4 / 9] + [1 / 9] * 4 + [1 / 36] * 4  # Weights for the D2Q9 model
+velocities = [
+    (0, 0),
+    (1, 0),
+    (0, 1),
+    (-1, 0),
+    (0, -1),
+    (1, 1),
+    (-1, 1),
+    (-1, -1),
+    (1, -1),
+]  # Lattice velocities
+
+def genTestGrid(testNum: int = 1):
+    if testNum == 1:
+        # Example grid where there is a wave shape (sinusoidal) within the top 10 rows of the grid, with densities ranging from 0 to 100.
+        return SimArray.SimArray([[math.sin(y/10*math.pi)*50+50 if y < 10 else 0 for x in range(40)] for y in range(40)])
+    elif testNum == 2:
+        # Weird looking shape where ChatGPT failed to make an apple logo.
+        apple_logo = [[0] * 40 for _ in range(40)]
+        # Left part of the apple
+        for i in range(5, 15):
+            for j in range(10, 30):
+                apple_logo[i][j] = 100
+
+        # Right part of the apple
+        for i in range(10, 25):
+            for j in range(20, 30):
+                apple_logo[i][j] = 100
+
+        # Top part (stem and curve of the apple)
+        for i in range(2, 10):
+            for j in range(4, 10):
+                apple_logo[i][j] = 100
+
+        # Bottom of the apple (rounded shape)
+        for i in range(18, 25):
+            for j in range(15, 20):
+                apple_logo[i][j] = 100
+        return SimArray.SimArray(apple_logo)
+    elif testNum == 3:
+        # Custom apple logo array I made myself
+        apple_logo = [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ,[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+        return SimArray.SimArray(apple_logo)
+    else:
+        return SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+
+def equilibrium(density, ux, uy):
+    feq = np.zeros(9)
+    for i, (cx, cy) in enumerate(velocities):
+        cu = cx * ux + cy * uy
+        feq[i] = (
+            weights[i] * density * (1 + 3 * cu + 4.5 * cu**2 - 1.5 * (ux**2 + uy**2))
+        )
+    return feq
 
 
-def main(creds, SPREADSHEET_ID, GRID_RANGE):
-    print(f"Using range: {GRID_RANGE} on spreadsheet {SPREADSHEET_ID}")
-    service = build("sheets", "v4", credentials=creds)
-
-    # Call the Sheets API
-    sheet = service.spreadsheets()
-    result = (
-        sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=GRID_RANGE).execute()
-    )
-
-    values = result.get("values", [])
-
-    if not values:
-        print("No data found.")
-        return
-    
-    # Example grid where the entire top row is density = 100 and the rest is 0
-    test_grid_1 = SimArray.SimArray([[100 if y == 0 else 0 for x in range(40)] for y in range(40)])
-    # Example grid where the middle column (19) is 100, as well as the entire middle row (19) is 100. This should look like a plus sign.
-    test_grid_2 = SimArray.SimArray([[100 if x == 19 or y == 19 else 0 for x in range(40)] for y in range(40)])
-    # Example grid where the there is a wave shape (sinusoidal) within the top 10 rows of the grid, with densities ranging from 0 to 100.
-    test_grid_3 = SimArray.SimArray([[math.sin(x/10*math.pi)*50+50 if y < 10 else 0 for x in range(40)] for y in range(40)])
-    genBodyFromSim(test_grid_3)
-    for i in range(EPOCH_STEPS):
-        sleep(3)
-        print(f"===================={i+1}====================")
-        body, test_grid_3 = genBodyFromSim(runSim(test_grid_3, 2))
-        updateSheetFromBody(service, SPREADSHEET_ID, body)
-    return values
-
-def runSim(sim_archive: SimArray, verbose=0):
-    sim = sim_archive.copy()
-    #print(f"sim: {sim}")
-    #print(f"sim_archive: {sim_archive}")
-    #print(sim_archive.printIndices())
-    #print(f"-----{sim_archive[0][0].Density}---{sim_archive[0][1].Density}-----")
-    # Assuming Density, IsLand, Current, x, y, grid, and land_grid are defined elsewhere
-    for x in range(sim_archive.len()):
-        for y in range(len(sim_archive[0])):
-            cur_density = sim_archive[x][y].Density
-            max_spill = cur_density * 0.75 if cur_density else 0
-            if x==0 and verbose > 1:
-                print(f"X: {x} and y: {y} and sim_archive[x][y]: {sim_archive[x][y]} and Cur density: {cur_density} and max spill: {max_spill}")
-
-            if max_spill > 0:
-                #print(f"Spilling {max_spill} from {x}, {y}")
-                if verbose > 2:
-                    print(f"Adjacent nodes: {sim_archive[x - 1][y] if x > 0 else None}, {sim_archive[x + 1][y] if x < sim_archive.len() - 1 else None}, {sim_archive[x][y - 1] if y > 0 else None}, {sim_archive[x][y + 1] if y < len(sim_archive[0]) - 1 else None}")
-                grid_left = sim_archive[x - 1][y] if x > 0 else None
-                grid_right = sim_archive[x + 1][y] if x < sim_archive.len() - 1 else None
-                grid_down = sim_archive[x][y - 1] if y > 0 else None
-                grid_up = sim_archive[x][y + 1] if y < len(sim_archive[0]) - 1 else None
-                adjacent_nodes = [grid_left, grid_right, grid_down, grid_up]
-
-                for node in adjacent_nodes:
-                    #print("\n")
-                    #print(node, node.index if node else None)
-                    #print(node.Density+max_spill/4 if node else None)
-                    if verbose > 3:
-                        print(f"Node density: {node.Density if node else None}")
-                        print(f"Cur density: {cur_density}")
-                        print(type(node))
-                        print(type(node.Density) if node else None)
-                    if type(node) is GridObject.GridObject and (node.Density < cur_density): # and (node.Density + max_spill / 4) <= cur_density
-                        if node.index[0] == 0 or node.index[0] == 1:
-                            #print(node.Density)
-                            #print(max_spill)
-                            print(f"Spilling {max_spill / 4} to {node.index}")
-
-                        sim[node.index[0]][node.index[1]].Density += max_spill / 4
-                        if verbose > 2:
-                            print(f"node index: {node.index} is now {sim[node.index[0]][node.index[1]].Density}")
-                        #print(sim[x][y].index)
-                        #if x == 0 and y <=3:
-                            #print(sim_archive)
-                        sim[x][y].Density -= max_spill / 4
-                        #print(sim_archive[0][1].Density)
-                        #if x == 0 and y <=3:
-                            #print(sim_archive)
-    if verbose > 0:
-        print(sim)
-    return sim
-
-# The sim dict passed to genBodyFromSim is the output of runSim, which means it's a 2D array of GridObjects where
-# .Density can be used to access the density of the grid at that point. The color of each grid cell is determined
-# by a linear gradient (interpolation) from blue to red, where blue is low density (0) and red is the high density (100).
-# Remember, cell values will always be from 0 to 100.
-def genBodyFromSim(sim: SimArray):
+def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
     requests = []
     for i in range(sim.len()):
         for j in range(len(sim[0])):
-            density = sim[i][j].Density
-            color = {
-                "red": density/100,
-                "green": 0,
-                "blue": (100 - density)/100,
-            }
-            requests.append({
-                "updateCells": {
-                    "range": {
-                        "sheetId": 0,
-                        "startRowIndex": i,
-                        "endRowIndex": i + 1,
-                        "startColumnIndex": j,
-                        "endColumnIndex": j + 1,
-                    },
-                    "rows": [{
-                        "values": [{
-                            "userEnteredFormat": {
-                                "backgroundColor": color
-                            },
-                            "userEnteredValue": {
-                                "numberValue": round(density)
-                            }
-                        }]
-                    }],
-                    "fields": "userEnteredFormat.backgroundColor,userEnteredValue.numberValue"
+            density = min(sim[i][j].Density, 100)
+            color = {}
+            if interpolation == "l":
+                color = {
+                    "red": density / 100,
+                    "green": 0,
+                    "blue": (100 - density) / 100,
                 }
-            })
-    
-    body = {
-        "requests": requests
-    }
+            elif interpolation == "q":
+                normalized_density = density / 100
+                quadratic_density = normalized_density ** 2  # Quadratic interpolation
+                color = {
+                    "red": quadratic_density,
+                    "green": 0,
+                    "blue": 1 - quadratic_density,
+                }
+            requests.append(
+                {
+                    "updateCells": {
+                        "range": {
+                            "sheetId": 0,
+                            "startRowIndex": i,
+                            "endRowIndex": i + 1,
+                            "startColumnIndex": j,
+                            "endColumnIndex": j + 1,
+                        },
+                        "rows": [
+                            {
+                                "values": [
+                                    {
+                                        "userEnteredFormat": {"backgroundColor": color},
+                                        "userEnteredValue": {
+                                            "numberValue": round(density)
+                                        },
+                                    }
+                                ]
+                            }
+                        ],
+                        "fields": "userEnteredFormat.backgroundColor,userEnteredValue.numberValue",
+                    }
+                }
+            )
+
+    body = {"requests": requests}
     return body, sim
+
 
 def updateSheetFromBody(service, SPREADSHEET_ID, body):
     request = service.spreadsheets().batchUpdate(
@@ -152,3 +174,100 @@ def updateSheetFromBody(service, SPREADSHEET_ID, body):
     )
     response = request.execute()
     return response
+
+
+def runSim(init_sim: SimArray, verbose=0):
+    sim = init_sim.copy()
+    total_density_before = np.sum([[cell.Density for cell in row] for row in sim])
+
+    # Create a copy of the densities and velocities to update
+    new_densities = np.array([[cell.Density for cell in row] for row in sim], dtype=float)
+    new_ux = np.array([[cell.ux for cell in row] for row in sim], dtype=float)
+    new_uy = np.array([[cell.uy for cell in row] for row in sim], dtype=float)
+
+    # Distribute fluid
+    for x in range(40):
+        for y in range(40):
+            cur_density = sim[x][y].Density
+            cur_ux = sim[x][y].ux
+            cur_uy = sim[x][y].uy
+            max_spill = cur_density * 0.75
+            if max_spill > 0:
+                # Calculate the amount to distribute to each neighbor
+                neighbors = []
+                if x > 0:
+                    neighbors.append((x - 1, y))
+                if x < 39:
+                    neighbors.append((x + 1, y))
+                if y > 0:
+                    neighbors.append((x, y - 1))
+                if y < 39:
+                    neighbors.append((x, y + 1))
+
+                total_difference = sum(
+                    max(cur_density - sim[nx][ny].Density, 0) for nx, ny in neighbors
+                )
+                if total_difference > 0:
+                    for nx, ny in neighbors:
+                        difference = max(cur_density - sim[nx][ny].Density, 0)
+                        direction_factor = 1.0
+                        if nx == x + 1:
+                            direction_factor += cur_ux
+                        elif nx == x - 1:
+                            direction_factor -= cur_ux
+                        if ny == y + 1:
+                            direction_factor += cur_uy
+                        elif ny == y - 1:
+                            direction_factor -= cur_uy
+                        direction_factor = max(direction_factor, 0)  # Ensure non-negative
+
+                        spill_amount = max_spill * (difference / total_difference) * 0.25 * direction_factor
+                        if verbose >= 2:
+                            print(f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})")
+                        if verbose >= 3:
+                            print(f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                        new_densities[nx][ny] += spill_amount
+                        new_densities[x][y] -= spill_amount
+                        if verbose >= 3:
+                            print(f"After: {new_densities[x][y]}, {new_densities[nx][ny]}")
+
+                        # Update velocities based on pressure differences
+                        pressure_difference = spill_amount
+                        new_ux[x][y] -= pressure_difference * (nx - x)
+                        new_uy[x][y] -= pressure_difference * (ny - y)
+                        new_ux[nx][ny] += pressure_difference * (nx - x)
+                        new_uy[nx][ny] += pressure_difference * (ny - y)
+
+    # Update the densities and velocities in the simulation
+    for x in range(40):
+        for y in range(40):
+            sim[x][y].Density = new_densities[x][y]
+            sim[x][y].ux = new_ux[x][y]
+            sim[x][y].uy = new_uy[x][y]
+
+    total_density_after = np.sum([[cell.Density for cell in row] for row in sim])
+    assert np.isclose(total_density_before, total_density_after), "Density is not conserved!"
+
+    return sim
+
+
+def main(creds, SPREADSHEET_ID, GRID_RANGE):
+    print(f"Using range: {GRID_RANGE} on spreadsheet {SPREADSHEET_ID}")
+    service = build("sheets", "v4", credentials=creds)
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+    result = (
+        sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=GRID_RANGE).execute()
+    )
+    values = result.get("values", [])
+    if not values:
+        print("No data found.")
+        return
+    
+    test_grid = genTestGrid(3)
+    
+    while True:
+        time.sleep(1)  # Small time step to observe patterns
+        test_grid = runSim(test_grid, 0)
+        body, test_grid = genBodyFromSim(test_grid)
+        updateSheetFromBody(service, SPREADSHEET_ID, body)

@@ -42,7 +42,8 @@ def main(creds, SPREADSHEET_ID, GRID_RANGE):
     # Example grid where the middle column (19) is 100, as well as the entire middle row (19) is 100. This should look like a plus sign.
     test_grid_2 = SimArray.SimArray([[100 if x == 19 or y == 19 else 0 for x in range(40)] for y in range(40)])
     # Example grid where the there is a wave shape (sinusoidal) within the top 10 rows of the grid, with densities ranging from 0 to 100.
-    test_grid_3 = SimArray.SimArray([[math.sin(x/10*math.pi)*50+50 if y < 10 else 0 for x in range(40)] for y in range(40)])
+    test_grid_3 = SimArray.SimArray([[math.sin(y/10*math.pi)*50+50 if y < 10 else 0 for x in range(40)] for y in range(40)])
+
     genBodyFromSim(test_grid_3)
     for i in range(EPOCH_STEPS):
         sleep(3)

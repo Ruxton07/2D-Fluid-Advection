@@ -2,11 +2,11 @@ import GridObject
 
 class SimArray:
     # default value is 40x40 array of 0s
-    def __init__(self, array=[[0 for x in range(40)] for y in range(40)]):
-        self.grid = [[0 for x in range(40)] for y in range(40)]
+    def __init__(self, array=[[0.0 for x in range(40)] for y in range(40)]):
+        self.grid = [[0.0 for x in range(40)] for y in range(40)]
         for x in range(len(array)):
             for y in range(len(array[0])):
-                self.grid[x][y] = GridObject.GridObject(array[x][y], (x, y))
+                self.grid[x][y] = GridObject.GridObject(float(array[x][y]*100 if (array[x][y]==1 or array[x][y]==1) else array[x][y]), (x, y))
                 
     
     def len(self):
