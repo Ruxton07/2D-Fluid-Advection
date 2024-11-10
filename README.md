@@ -35,7 +35,7 @@ This project simulates fluid dynamics on a 2D grid using Python. The simulation 
 ```
 
 3. Set up Google API credentials:
-- Create a project in the (Google Cloud Console)[https://console.cloud.google.com/].
+- Create a project in the [Google Cloud Console](https://console.cloud.google.com/).
 - Enable the Google Sheets API and Google Drive API.
 - Create OAuth 2.0 credentials and download the `credentials.json` file.
 - Place the `credentials.json` file in the root directory of the project.
