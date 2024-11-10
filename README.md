@@ -75,8 +75,10 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request on GitHub or [contact me](#contact) if you have something else.
+This project was created by Ryan Kellar. Any feedback or advice are encouraged!
+
+Contributions are welcome at any time! Please open an issue or submit a pull request on GitHub or [contact me](#contact) if you have something else.
 
 ## Contact
 
-For any questions or inquiries, please contact me at [rt.kellar@gmail.com] or direct message me through my Discord, ruxton07.
+For any questions or inquiries, please contact me at [my email](rt.kellar@gmail.com) or direct message me through my Discord, ruxton07.
