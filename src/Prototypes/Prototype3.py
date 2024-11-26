@@ -94,16 +94,58 @@ def runSim(sim_archive: SimArray, verbose=0):
     return sim
 
 
-def genBodyFromSim(sim: SimArray):
+def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
     requests = []
     for i in range(sim.len()):
         for j in range(len(sim[0])):
-            density = sim[i][j].Density
-            color = {
-                "red": density / 100,
-                "green": 0,
-                "blue": (100 - density) / 100,
-            }
+            density = min(sim[i][j].Density, 100)
+            data_val = 0
+            font_size = 7 if data == "d" else 10
+            match data:
+                case "d":
+                    data_val = round(density)
+                case "vx":
+                    data_val = sim[i][j].ux
+                case "vy":
+                    data_val = sim[i][j].uy
+                case "v":
+                    ux = sim[i][j].ux
+                    uy = sim[i][j].uy
+                    if ux > 0 and uy > 0:
+                        data_val = "↗"  # Up and to the right
+                    elif ux < 0 and uy > 0:
+                        data_val = "↖"  # Up and to the left
+                    elif ux > 0 and uy < 0:
+                        data_val = "↘"  # Down and to the right
+                    elif ux < 0 and uy < 0:
+                        data_val = "↙"  # Down and to the left
+                    elif ux > 0 and uy == 0:
+                        data_val = "→"  # Right
+                    elif ux < 0 and uy == 0:
+                        data_val = "←"  # Left
+                    elif ux == 0 and uy > 0:
+                        data_val = "↑"  # Up
+                    elif ux == 0 and uy < 0:
+                        data_val = "↓"  # Down
+                    else:
+                        data_val = "•"  # No movement
+                case "_":
+                    data_val = ""
+            color = {}
+            if interpolation == "l":
+                color = {
+                    "red": density / 100,
+                    "green": 0,
+                    "blue": (100 - density) / 100,
+                }
+            elif interpolation == "q":
+                normalized_density = density / 100
+                quadratic_density = normalized_density ** 2  # quadratic interpolation
+                color = {
+                    "red": quadratic_density,
+                    "green": 0,
+                    "blue": 1 - quadratic_density,
+                }
             requests.append(
                 {
                     "updateCells": {
@@ -118,22 +160,24 @@ def genBodyFromSim(sim: SimArray):
                             {
                                 "values": [
                                     {
-                                        "userEnteredFormat": {"backgroundColor": color},
+                                        "userEnteredFormat": {
+                                            "backgroundColor": color,
+                                            "textFormat": {"fontSize": font_size},
+                                        },
                                         "userEnteredValue": {
-                                            "numberValue": round(density)
+                                            "stringValue" if data == "v" else "numberValue": data_val
                                         },
                                     }
                                 ]
                             }
                         ],
-                        "fields": "userEnteredFormat.backgroundColor,userEnteredValue.numberValue",
+                        "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.stringValue" if data == "v" else "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.numberValue",
                     }
                 }
             )
 
     body = {"requests": requests}
     return body, sim
-
 
 def updateSheetFromBody(service, SPREADSHEET_ID, body):
     request = service.spreadsheets().batchUpdate(

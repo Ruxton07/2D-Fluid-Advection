@@ -18,7 +18,6 @@ CLIENT_SECRET_FILE = "credentials.json"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
-TEST_GRID_ID = 4
 
 # LBM parameters
 weights = [4 / 9] + [1 / 9] * 4 + [1 / 36] * 4  # Weights for the D2Q9 model
@@ -34,8 +33,15 @@ velocities = [
     (1, -1),
 ]  # Lattice velocities
 
+
 def genTestGrid(testNum: int = 1):
-    return SimArray.SimArray(tg.getTestGrid(testNum)) if tg.getTestGrid(testNum) else SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+    return (
+        SimArray.SimArray(tg.getTestGrid(testNum))
+        if tg.getTestGrid(testNum)
+        else SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+    )
+
+
 def equilibrium(density, ux, uy):
     feq = np.zeros(9)
     for i, (cx, cy) in enumerate(velocities):
@@ -46,11 +52,43 @@ def equilibrium(density, ux, uy):
     return feq
 
 
-def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
+def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
     requests = []
     for i in range(sim.len()):
         for j in range(len(sim[0])):
             density = min(sim[i][j].Density, 100)
+            data_val = 0
+            font_size = 7 if data == "d" else 10
+            match data:
+                case "d":
+                    data_val = round(density)
+                case "vx":
+                    data_val = sim[i][j].ux
+                case "vy":
+                    data_val = sim[i][j].uy
+                case "v":
+                    ux = sim[i][j].ux
+                    uy = sim[i][j].uy
+                    if ux > 0 and uy > 0:
+                        data_val = "↗"  # Up and to the right
+                    elif ux < 0 and uy > 0:
+                        data_val = "↖"  # Up and to the left
+                    elif ux > 0 and uy < 0:
+                        data_val = "↘"  # Down and to the right
+                    elif ux < 0 and uy < 0:
+                        data_val = "↙"  # Down and to the left
+                    elif ux > 0 and uy == 0:
+                        data_val = "→"  # Right
+                    elif ux < 0 and uy == 0:
+                        data_val = "←"  # Left
+                    elif ux == 0 and uy > 0:
+                        data_val = "↑"  # Up
+                    elif ux == 0 and uy < 0:
+                        data_val = "↓"  # Down
+                    else:
+                        data_val = "•"  # No movement
+                case "_":
+                    data_val = ""
             color = {}
             if interpolation == "l":
                 color = {
@@ -60,7 +98,7 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
                 }
             elif interpolation == "q":
                 normalized_density = density / 100
-                quadratic_density = normalized_density ** 2  # Quadratic interpolation
+                quadratic_density = normalized_density**2  # quadratic interpolation
                 color = {
                     "red": quadratic_density,
                     "green": 0,
@@ -80,15 +118,26 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
                             {
                                 "values": [
                                     {
-                                        "userEnteredFormat": {"backgroundColor": color},
+                                        "userEnteredFormat": {
+                                            "backgroundColor": color,
+                                            "textFormat": {"fontSize": font_size},
+                                        },
                                         "userEnteredValue": {
-                                            "numberValue": round(density)
+                                            (
+                                                "stringValue"
+                                                if data == "v"
+                                                else "numberValue"
+                                            ): data_val
                                         },
                                     }
                                 ]
                             }
                         ],
-                        "fields": "userEnteredFormat.backgroundColor,userEnteredValue.numberValue",
+                        "fields": (
+                            "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.stringValue"
+                            if data == "v"
+                            else "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.numberValue"
+                        ),
                     }
                 }
             )
@@ -105,12 +154,14 @@ def updateSheetFromBody(service, SPREADSHEET_ID, body):
     return response
 
 
-def runSim(init_sim: SimArray, verbose=0):
+def runSim(init_sim: SimArray, verbose=False):
     sim = init_sim.copy()
     total_density_before = np.sum([[cell.Density for cell in row] for row in sim])
 
     # Create a copy of the densities and velocities to update
-    new_densities = np.array([[cell.Density for cell in row] for row in sim], dtype=float)
+    new_densities = np.array(
+        [[cell.Density for cell in row] for row in sim], dtype=float
+    )
     new_ux = np.array([[cell.ux for cell in row] for row in sim], dtype=float)
     new_uy = np.array([[cell.uy for cell in row] for row in sim], dtype=float)
 
@@ -148,17 +199,30 @@ def runSim(init_sim: SimArray, verbose=0):
                             direction_factor += cur_uy
                         elif ny == y - 1:
                             direction_factor -= cur_uy
-                        direction_factor = max(direction_factor, 0)  # Ensure non-negative
+                        direction_factor = max(
+                            direction_factor, 0
+                        )  # Ensure non-negative
 
-                        spill_amount = max_spill * (difference / total_difference) * 0.25 * direction_factor
-                        if verbose >= 2:
-                            print(f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})")
-                        if verbose >= 3:
-                            print(f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                        spill_amount = (
+                            max_spill
+                            * (difference / total_difference)
+                            * 0.25
+                            * direction_factor
+                        )
+                        if verbose:
+                            print(
+                                f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})"
+                            )
+                        if verbose:
+                            print(
+                                f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
                         new_densities[nx][ny] += spill_amount
                         new_densities[x][y] -= spill_amount
-                        if verbose >= 3:
-                            print(f"After: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                        if verbose:
+                            print(
+                                f"After: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
 
                         # Update velocities based on pressure differences
                         pressure_difference = spill_amount
@@ -175,15 +239,24 @@ def runSim(init_sim: SimArray, verbose=0):
             sim[x][y].uy = new_uy[x][y]
 
     total_density_after = np.sum([[cell.Density for cell in row] for row in sim])
-    assert np.isclose(total_density_before, total_density_after), "Density is not conserved!"
+    assert np.isclose(
+        total_density_before, total_density_after
+    ), "Density is not conserved!"
 
     return sim
 
 
-def main(creds, SPREADSHEET_ID, GRID_RANGE):
+def main(
+    creds,
+    SPREADSHEET_ID,
+    GRID_RANGE: str = "Grid!A1:AN40",
+    TEST_GRID_ID: int = 7,
+    DATA_DISPLAY_TYPE: str = "v",
+    COLOR_INTERPOLATION: str = "l",
+    VERBOSE_VAL: bool = True,
+):
     print(f"Using range: {GRID_RANGE} on spreadsheet {SPREADSHEET_ID}")
     service = build("sheets", "v4", credentials=creds)
-    # Call the Sheets API
     sheet = service.spreadsheets()
     result = (
         sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=GRID_RANGE).execute()
@@ -192,11 +265,13 @@ def main(creds, SPREADSHEET_ID, GRID_RANGE):
     if not values:
         print("No data found.")
         return
-    
+
     test_grid = genTestGrid(TEST_GRID_ID)
-    
+
     while True:
-        time.sleep(1)  # Small time step to observe patterns
-        test_grid = runSim(test_grid, 0)
-        body, test_grid = genBodyFromSim(test_grid)
+        time.sleep(1)
+        test_grid = runSim(test_grid, VERBOSE_VAL)
+        body, test_grid = genBodyFromSim(
+            test_grid, COLOR_INTERPOLATION, DATA_DISPLAY_TYPE
+        )
         updateSheetFromBody(service, SPREADSHEET_ID, body)

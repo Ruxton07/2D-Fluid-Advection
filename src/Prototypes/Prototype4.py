@@ -34,35 +34,14 @@ velocities = [
     (1, -1),
 ]  # Lattice velocities
 
+
 def genTestGrid(testNum: int = 1):
-    if testNum == 1:
-        # Example grid where there is a wave shape (sinusoidal) within the top 10 rows of the grid, with densities ranging from 0 to 100.
-        return SimArray.SimArray([[math.sin(y/10*math.pi)*50+50 if y < 10 else 0 for x in range(40)] for y in range(40)])
-    elif testNum == 2:
-        # Example grid where is an apple logo shape within the grid, with densities ranging from 0 to 100.
-        apple_logo = [[0] * 40 for _ in range(40)]
-        # Left part of the apple
-        for i in range(5, 15):
-            for j in range(10, 30):
-                apple_logo[i][j] = 100
+    return (
+        SimArray.SimArray(tg.getTestGrid(testNum))
+        if tg.getTestGrid(testNum)
+        else SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+    )
 
-        # Right part of the apple
-        for i in range(10, 25):
-            for j in range(20, 30):
-                apple_logo[i][j] = 100
-
-        # Top part (stem and curve of the apple)
-        for i in range(2, 10):
-            for j in range(4, 10):
-                apple_logo[i][j] = 100
-
-        # Bottom of the apple (rounded shape)
-        for i in range(18, 25):
-            for j in range(15, 20):
-                apple_logo[i][j] = 100
-        return SimArray.SimArray(apple_logo)
-    else:
-        return SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
 
 def equilibrium(density, ux, uy):
     feq = np.zeros(9)
@@ -74,11 +53,43 @@ def equilibrium(density, ux, uy):
     return feq
 
 
-def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
+def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
     requests = []
     for i in range(sim.len()):
         for j in range(len(sim[0])):
             density = min(sim[i][j].Density, 100)
+            data_val = 0
+            font_size = 7 if data == "d" else 10
+            match data:
+                case "d":
+                    data_val = round(density)
+                case "vx":
+                    data_val = sim[i][j].ux
+                case "vy":
+                    data_val = sim[i][j].uy
+                case "v":
+                    ux = sim[i][j].ux
+                    uy = sim[i][j].uy
+                    if ux > 0 and uy > 0:
+                        data_val = "↗"  # Up and to the right
+                    elif ux < 0 and uy > 0:
+                        data_val = "↖"  # Up and to the left
+                    elif ux > 0 and uy < 0:
+                        data_val = "↘"  # Down and to the right
+                    elif ux < 0 and uy < 0:
+                        data_val = "↙"  # Down and to the left
+                    elif ux > 0 and uy == 0:
+                        data_val = "→"  # Right
+                    elif ux < 0 and uy == 0:
+                        data_val = "←"  # Left
+                    elif ux == 0 and uy > 0:
+                        data_val = "↑"  # Up
+                    elif ux == 0 and uy < 0:
+                        data_val = "↓"  # Down
+                    else:
+                        data_val = "•"  # No movement
+                case "_":
+                    data_val = ""
             color = {}
             if interpolation == "l":
                 color = {
@@ -88,7 +99,7 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
                 }
             elif interpolation == "q":
                 normalized_density = density / 100
-                quadratic_density = normalized_density ** 2  # Quadratic interpolation
+                quadratic_density = normalized_density**2  # quadratic interpolation
                 color = {
                     "red": quadratic_density,
                     "green": 0,
@@ -108,15 +119,26 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l"):
                             {
                                 "values": [
                                     {
-                                        "userEnteredFormat": {"backgroundColor": color},
+                                        "userEnteredFormat": {
+                                            "backgroundColor": color,
+                                            "textFormat": {"fontSize": font_size},
+                                        },
                                         "userEnteredValue": {
-                                            "numberValue": round(density)
+                                            (
+                                                "stringValue"
+                                                if data == "v"
+                                                else "numberValue"
+                                            ): data_val
                                         },
                                     }
                                 ]
                             }
                         ],
-                        "fields": "userEnteredFormat.backgroundColor,userEnteredValue.numberValue",
+                        "fields": (
+                            "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.stringValue"
+                            if data == "v"
+                            else "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.numberValue"
+                        ),
                     }
                 }
             )
@@ -164,15 +186,23 @@ def runSim(init_sim: SimArray, verbose=0):
                 if total_difference > 0:
                     for nx, ny in neighbors:
                         difference = max(cur_density - sim[nx][ny].Density, 0)
-                        spill_amount = max_spill * (difference / total_difference) * 0.25
+                        spill_amount = (
+                            max_spill * (difference / total_difference) * 0.25
+                        )
                         if verbose >= 2:
-                            print(f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})")
+                            print(
+                                f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})"
+                            )
                         if verbose >= 3:
-                            print(f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                            print(
+                                f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
                         new_densities[nx][ny] += spill_amount
                         new_densities[x][y] -= spill_amount
                         if verbose >= 3:
-                            print(f"After: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                            print(
+                                f"After: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
 
     # Update the densities in the simulation
     for x in range(40):
@@ -182,15 +212,22 @@ def runSim(init_sim: SimArray, verbose=0):
     total_density_after = np.sum([[cell.Density for cell in row] for row in sim])
     if verbose >= 1:
         print(f"Total density after: {total_density_after}")
-    #assert np.isclose(total_density_before, total_density_after), "Density is not conserved!"
+    # assert np.isclose(total_density_before, total_density_after), "Density is not conserved!"
 
     return sim
 
 
-def main(creds, SPREADSHEET_ID, GRID_RANGE):
+def main(
+    creds,
+    SPREADSHEET_ID,
+    GRID_RANGE: str = "Grid!A1:AN40",
+    TEST_GRID_ID: int = 7,
+    DATA_DISPLAY_TYPE: str = "v",
+    COLOR_INTERPOLATION: str = "l",
+    VERBOSE_VAL: bool = True,
+):
     print(f"Using range: {GRID_RANGE} on spreadsheet {SPREADSHEET_ID}")
     service = build("sheets", "v4", credentials=creds)
-    # Call the Sheets API
     sheet = service.spreadsheets()
     result = (
         sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=GRID_RANGE).execute()
@@ -199,11 +236,13 @@ def main(creds, SPREADSHEET_ID, GRID_RANGE):
     if not values:
         print("No data found.")
         return
-    
-    test_grid = genTestGrid(2)
-    
+
+    test_grid = genTestGrid(TEST_GRID_ID)
+
     while True:
-        time.sleep(2)  # Small time step to observe patterns
-        test_grid = runSim(test_grid, 0)
-        body, test_grid = genBodyFromSim(test_grid)
+        time.sleep(1)
+        test_grid = runSim(test_grid, VERBOSE_VAL)
+        body, test_grid = genBodyFromSim(
+            test_grid, COLOR_INTERPOLATION, DATA_DISPLAY_TYPE
+        )
         updateSheetFromBody(service, SPREADSHEET_ID, body)

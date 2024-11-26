@@ -17,13 +17,14 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 
-TEST_GRID_ID = 7
-DATA_DISPLAY_TYPE = "v"
-COLOR_INTERPOLATION = "l"
-VERBOSE_VAL = 3
 
 def genTestGrid(testNum: int = 1):
-    return SimArray.SimArray(tg.getTestGrid(testNum)) if tg.getTestGrid(testNum) else SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+    return (
+        SimArray.SimArray(tg.getTestGrid(testNum))
+        if tg.getTestGrid(testNum)
+        else SimArray.SimArray([[0 for x in range(40)] for y in range(40)])
+    )
+
 
 # v is for velocity numbers displayed and d is for density numbers displayed
 def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
@@ -32,13 +33,14 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
         for j in range(len(sim[0])):
             density = min(sim[i][j].Density, 100)
             data_val = 0
+            font_size = 7 if data == "d" else 10
             match data:
                 case "d":
-                    data_val = density
+                    data_val = round(density)
                 case "vx":
-                    data_val = sim[i][j].ux, 100
+                    data_val = sim[i][j].ux
                 case "vy":
-                    data_val = sim[i][j].uy, 100
+                    data_val = sim[i][j].uy
                 case "v":
                     ux = sim[i][j].ux
                     uy = sim[i][j].uy
@@ -71,7 +73,7 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
                 }
             elif interpolation == "q":
                 normalized_density = density / 100
-                quadratic_density = normalized_density ** 2  # quadratic interpolation
+                quadratic_density = normalized_density**2  # quadratic interpolation
                 color = {
                     "red": quadratic_density,
                     "green": 0,
@@ -91,15 +93,26 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
                             {
                                 "values": [
                                     {
-                                        "userEnteredFormat": {"backgroundColor": color},
+                                        "userEnteredFormat": {
+                                            "backgroundColor": color,
+                                            "textFormat": {"fontSize": font_size},
+                                        },
                                         "userEnteredValue": {
-                                            "stringValue" if data == "v" else "numberValue": data_val
+                                            (
+                                                "stringValue"
+                                                if data == "v"
+                                                else "numberValue"
+                                            ): data_val
                                         },
                                     }
                                 ]
                             }
                         ],
-                        "fields": "userEnteredFormat.backgroundColor,userEnteredValue.stringValue" if data == "v" else "userEnteredFormat.backgroundColor,userEnteredValue.numberValue",
+                        "fields": (
+                            "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.stringValue"
+                            if data == "v"
+                            else "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.fontSize,userEnteredValue.numberValue"
+                        ),
                     }
                 }
             )
@@ -108,7 +121,9 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
     return body, sim
 
 
-def updateSheetFromBody(service, SPREADSHEET_ID, body): #this sends the data to the spreadsheets
+def updateSheetFromBody(
+    service, SPREADSHEET_ID, body
+):  # this sends the data to the spreadsheets
     request = service.spreadsheets().batchUpdate(
         spreadsheetId=SPREADSHEET_ID, body=body
     )
@@ -116,12 +131,14 @@ def updateSheetFromBody(service, SPREADSHEET_ID, body): #this sends the data to 
     return response
 
 
-def runSim(init_sim: SimArray, verbose=0):
+def runSim(init_sim: SimArray, verbose=False):
     sim = init_sim.copy()
     total_density_before = np.sum([[cell.Density for cell in row] for row in sim])
 
     # Create a copy of the densities and velocities to update
-    new_densities = np.array([[cell.Density for cell in row] for row in sim], dtype=float)
+    new_densities = np.array(
+        [[cell.Density for cell in row] for row in sim], dtype=float
+    )
     new_ux = np.array([[cell.ux for cell in row] for row in sim], dtype=float)
     new_uy = np.array([[cell.uy for cell in row] for row in sim], dtype=float)
 
@@ -133,7 +150,9 @@ def runSim(init_sim: SimArray, verbose=0):
             cur_uy = sim[x][y].uy
             max_spill = cur_density * 0.75
             velocity_magnitude = math.sqrt(cur_ux**2 + cur_uy**2)
-            scaling_factor = max(1 - velocity_magnitude, 0)  # Scale based on velocity magnitude
+            scaling_factor = max(
+                1 - velocity_magnitude, 0
+            )  # Scale based on velocity magnitude
 
             if max_spill > 0:
                 # Determine the direction to distribute fluid
@@ -174,25 +193,44 @@ def runSim(init_sim: SimArray, verbose=0):
                             direction_factor += cur_uy
                         elif ny == y - 1:
                             direction_factor -= cur_uy
-                        direction_factor = max(direction_factor, 0)  # Ensure non-negative
+                        direction_factor = max(
+                            direction_factor, 0
+                        )  # Ensure non-negative
 
-                        spill_amount = max_spill * (difference / total_difference) * direction_factor * scaling_factor
-                        if verbose >= 4:
-                            print(f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})")
-                        if verbose >= 4:
-                            print(f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                        spill_amount = (
+                            max_spill
+                            * (difference / total_difference)
+                            * direction_factor
+                            * scaling_factor
+                        )
+                        if verbose:
+                            print(
+                                f"Spilling {spill_amount} from ({x}, {y}) to ({nx}, {ny})"
+                            )
+                        if verbose:
+                            print(
+                                f"Before: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
                         new_densities[nx][ny] += spill_amount
                         new_densities[x][y] -= spill_amount
-                        if verbose >= 4:
-                            print(f"After: {new_densities[x][y]}, {new_densities[nx][ny]}")
+                        if verbose:
+                            print(
+                                f"After: {new_densities[x][y]}, {new_densities[nx][ny]}"
+                            )
 
                         # Transfer velocities along with the fluid
-                        new_ux[nx][ny] = (new_ux[nx][ny] * sim[nx][ny].Density + cur_ux * spill_amount) / new_densities[nx][ny]
-                        new_uy[nx][ny] = (new_uy[nx][ny] * sim[nx][ny].Density + cur_uy * spill_amount) / new_densities[nx][ny]
+                        new_ux[nx][ny] = (
+                            new_ux[nx][ny] * sim[nx][ny].Density + cur_ux * spill_amount
+                        ) / new_densities[nx][ny]
+                        new_uy[nx][ny] = (
+                            new_uy[nx][ny] * sim[nx][ny].Density + cur_uy * spill_amount
+                        ) / new_densities[nx][ny]
 
                         # Introduce velocity based on density difference (potential energy to kinetic energy conversion)
                         if cur_ux == 0 and cur_uy == 0:
-                            velocity_introduction = math.sqrt(difference)  # Simplified conversion
+                            velocity_introduction = math.sqrt(
+                                difference
+                            )  # Simplified conversion
                             if nx == x + 1:
                                 new_ux[nx][ny] += velocity_introduction
                             elif nx == x - 1:
@@ -220,12 +258,22 @@ def runSim(init_sim: SimArray, verbose=0):
             sim[x][y].uy = new_uy[x][y]
 
     total_density_after = np.sum([[cell.Density for cell in row] for row in sim])
-    assert np.isclose(total_density_before, total_density_after), "Density is not conserved!"
+    assert np.isclose(
+        total_density_before, total_density_after
+    ), "Density is not conserved!"
 
     return sim
 
 
-def main(creds, SPREADSHEET_ID, GRID_RANGE):
+def main(
+    creds,
+    SPREADSHEET_ID,
+    GRID_RANGE: str = "Grid!A1:AN40",
+    TEST_GRID_ID: int = 7,
+    DATA_DISPLAY_TYPE: str = "v",
+    COLOR_INTERPOLATION: str = "l",
+    VERBOSE_VAL: bool = True,
+):
     print(f"Using range: {GRID_RANGE} on spreadsheet {SPREADSHEET_ID}")
     service = build("sheets", "v4", credentials=creds)
     sheet = service.spreadsheets()
@@ -236,11 +284,13 @@ def main(creds, SPREADSHEET_ID, GRID_RANGE):
     if not values:
         print("No data found.")
         return
-    
+
     test_grid = genTestGrid(TEST_GRID_ID)
-    
+
     while True:
         time.sleep(1)
         test_grid = runSim(test_grid, VERBOSE_VAL)
-        body, test_grid = genBodyFromSim(test_grid, COLOR_INTERPOLATION, DATA_DISPLAY_TYPE)
+        body, test_grid = genBodyFromSim(
+            test_grid, COLOR_INTERPOLATION, DATA_DISPLAY_TYPE
+        )
         updateSheetFromBody(service, SPREADSHEET_ID, body)
