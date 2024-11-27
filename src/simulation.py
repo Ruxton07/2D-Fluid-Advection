@@ -45,23 +45,23 @@ def genBodyFromSim(sim: SimArray, interpolation: str = "l", data: str = "d"):
                     ux = sim[i][j].ux
                     uy = sim[i][j].uy
                     if ux > 0 and uy > 0:
-                        data_val = "↗"  # Up and to the right
+                        data_val = "↗"
                     elif ux < 0 and uy > 0:
-                        data_val = "↖"  # Up and to the left
+                        data_val = "↖"
                     elif ux > 0 and uy < 0:
-                        data_val = "↘"  # Down and to the right
+                        data_val = "↘"
                     elif ux < 0 and uy < 0:
-                        data_val = "↙"  # Down and to the left
+                        data_val = "↙"
                     elif ux > 0 and uy == 0:
-                        data_val = "→"  # Right
+                        data_val = "→"
                     elif ux < 0 and uy == 0:
-                        data_val = "←"  # Left
+                        data_val = "←"
                     elif ux == 0 and uy > 0:
-                        data_val = "↑"  # Up
+                        data_val = "↑"
                     elif ux == 0 and uy < 0:
-                        data_val = "↓"  # Down
+                        data_val = "↓"
                     else:
-                        data_val = "•"  # No movement
+                        data_val = "•"
                 case "_":
                     data_val = ""
             color = {}
@@ -135,14 +135,14 @@ def runSim(init_sim: SimArray, verbose=False):
     sim = init_sim.copy()
     total_density_before = np.sum([[cell.Density for cell in row] for row in sim])
 
-    # Create a copy of the densities and velocities to update
+    # create a copy of the densities and velocities to update
     new_densities = np.array(
         [[cell.Density for cell in row] for row in sim], dtype=float
     )
     new_ux = np.array([[cell.ux for cell in row] for row in sim], dtype=float)
     new_uy = np.array([[cell.uy for cell in row] for row in sim], dtype=float)
 
-    # Distribute fluid
+    # distribute fluid
     for x in range(40):
         for y in range(40):
             cur_density = sim[x][y].Density
@@ -150,7 +150,7 @@ def runSim(init_sim: SimArray, verbose=False):
             cur_uy = sim[x][y].uy
             max_spill = cur_density * 0.75
             if max_spill > 0:
-                # Calculate the amount to distribute to each neighbor
+                # calculate the amount to distribute to each neighbor
                 neighbors = []
                 if x > 0:
                     neighbors.append((x - 1, y))
@@ -178,7 +178,7 @@ def runSim(init_sim: SimArray, verbose=False):
                             direction_factor -= cur_uy
                         direction_factor = max(
                             direction_factor, 0
-                        )  # Ensure non-negative
+                        )  # ensure non-negative
 
                         spill_amount = (
                             max_spill
@@ -201,7 +201,7 @@ def runSim(init_sim: SimArray, verbose=False):
                                 f"After: {new_densities[x][y]}, {new_densities[nx][ny]}"
                             )
 
-                        # Transfer velocities along with the fluid
+                        # transfer velocities along with the fluid
                         new_ux[nx][ny] = (
                             new_ux[nx][ny] * sim[nx][ny].Density + cur_ux * spill_amount
                         ) / new_densities[nx][ny]
@@ -209,10 +209,10 @@ def runSim(init_sim: SimArray, verbose=False):
                             new_uy[nx][ny] * sim[nx][ny].Density + cur_uy * spill_amount
                         ) / new_densities[nx][ny]
 
-                        # Introduce velocity based on density difference (potential energy to kinetic energy conversion)
+                        # introduce velocity based on density difference (potential energy to kinetic energy conversion)
                         velocity_introduction = math.sqrt(
                             difference
-                        )  # Simplified conversion
+                        )  # simplified conversion
                         if nx == x + 1:
                             new_ux[nx][ny] += velocity_introduction
                         elif nx == x - 1:
@@ -222,7 +222,7 @@ def runSim(init_sim: SimArray, verbose=False):
                         elif ny == y - 1:
                             new_uy[nx][ny] -= velocity_introduction
 
-                        # Handle cells next to walls by redirecting velocity
+                        # handle cells next to walls by redirecting velocity
                         if nx == 0 and new_ux[nx][ny] < 0:
                             new_ux[nx][ny] = -new_ux[nx][ny]
                         elif nx == 39 and new_ux[nx][ny] > 0:
@@ -232,7 +232,7 @@ def runSim(init_sim: SimArray, verbose=False):
                         elif ny == 39 and new_uy[nx][ny] > 0:
                             new_uy[nx][ny] = -new_uy[nx][ny]
 
-    # Update the densities and velocities in the simulation
+    # update the densities and velocities in the simulation
     for x in range(40):
         for y in range(40):
             sim[x][y].Density = new_densities[x][y]
