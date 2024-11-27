@@ -9,3 +9,5 @@ credentials.json
 .clasp.json
 src/appsscript.json
 settings.json
+
+**/Prototypes/*
