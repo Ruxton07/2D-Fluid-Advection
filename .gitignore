@@ -11,3 +11,7 @@ src/appsscript.json
 settings.json
 
 **/Prototypes/*
+
+# Submodules
+
+**/2D-Fluid-Advection/*
