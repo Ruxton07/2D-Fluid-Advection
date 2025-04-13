@@ -1,0 +1,3 @@
+[submodule "build/submodules/2D-Fluid-Advection"]
+	path = build/submodules/2D-Fluid-Advection
+	url = https://github.com/Ruxton07/2D-Fluid-Advection
